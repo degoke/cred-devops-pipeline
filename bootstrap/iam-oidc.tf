@@ -20,7 +20,11 @@ data "aws_iam_policy_document" "gha_oidc_trust" {
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_repository}:ref:refs/heads/main", "repo:${var.github_repository}:pull_request/*"]
+      values   = [
+        "repo:${var.github_repository}:ref:refs/heads/main",
+        "repo:${var.github_repository}:pull_request/*",
+        "repo:${var.github_repository}:environment:production"
+      ]
     }
   }
 }
