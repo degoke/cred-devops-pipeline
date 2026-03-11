@@ -1,0 +1,71 @@
+name: Infrastructure
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - 'terraform/**'
+  pull_request:
+    branches: ["main"]
+    paths:
+      - 'terraform/**'
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: us-east-1
+  AWS_OIDC_ROLE_ARN: arn:aws:iam::623927359054:role/cred-devops-gha-oidc-role
+  TF_WORKING_DIR: terraform
+  IMAGE_NAME: ghcr.io/${{ github.repository }}
+
+jobs:
+  terraform-plan:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ env.TF_WORKING_DIR }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.5
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - run: terraform init -input=false
+      - name: Terraform plan
+        run: |
+          terraform plan -input=false \
+            -var "aws_region=${{ env.AWS_REGION }}" \
+            -var "project_name=${{ github.event.repository.name }}" \
+            -var "image_name=${{ env.IMAGE_NAME }}" \
+            -var "image_tag=${{ github.sha }}"
+
+  terraform-apply:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: production
+    defaults:
+      run:
+        working-directory: ${{ env.TF_WORKING_DIR }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.5
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - run: terraform init -input=false
+      - name: Terraform apply
+        run: |
+          terraform apply -input=false -auto-approve \
+            -var "aws_region=${{ env.AWS_REGION }}" \
+            -var "project_name=${{ github.event.repository.name }}" \
+            -var "image_name=${{ env.IMAGE_NAME }}" \
+            -var "image_tag=${{ github.sha }}"

@@ -95,18 +95,18 @@ After bootstrap finishes, grab the role ARN it created:
 terraform output gha_oidc_role_arn
 ```
 
-Open `.github/workflows/ci-cd.yml` and paste that ARN as the value of `AWS_OIDC_ROLE_ARN`:
+Open `.github/workflows/infra.yml` and `.github/workflows/deploy.yml` and paste that ARN as the value of `AWS_OIDC_ROLE_ARN` in both:
 
 ```yaml
 env:
   AWS_OIDC_ROLE_ARN: arn:aws:iam::123456789012:role/cred-devops-gha-oidc-role
 ```
 
-This is what allows GitHub Actions to assume an AWS role and deploy on your behalf — without it, the pipeline can't reach AWS.
+This is what allows GitHub Actions to assume an AWS role and deploy on your behalf — without it, the pipelines can't reach AWS.
 
 **4. Terraform variables**
 
-In **CI**, the workflow sets them automatically via `TF_VAR_*` in `.github/workflows/ci-cd.yml` (`aws_region`, `project_name`, `image_name`, `image_tag`), so you don't need a `terraform.tfvars` file for the pipeline.
+In **CI**, the workflows set them automatically via `-var` flags in `.github/workflows/infra.yml` (`aws_region`, `project_name`, `image_name`, `image_tag`), so you don't need a `terraform.tfvars` file for the pipeline.
 
 For **local** Terraform runs (e.g. `terraform plan`), copy the example and edit as needed:
 
@@ -117,15 +117,23 @@ cp terraform.tfvars.example terraform.tfvars
 
 **5. Push to `main`**
 
-Once everything is configured, push to `main` and GitHub Actions takes over. It will:
-- Run tests
-- Build the Docker image and push it to GHCR
-- Run `terraform apply` (if any `.tf` files changed)
-- Deploy the new image to ECS
+Once everything is configured, push to `main` and GitHub Actions takes over. Two workflows run:
+
+- **Infrastructure** (`infra.yml`) — only triggers when `terraform/` files change. Runs `terraform apply` to update AWS resources.
+- **Deploy** (`deploy.yml`) — triggers on every push to `main` *and* after the Infrastructure workflow completes. Runs tests, builds the Docker image, pushes it to GHCR, reads ECS details from Terraform outputs, and deploys to ECS.
+
+On the very first push, both workflows run: Infrastructure creates the resources, then Deploy picks up the outputs and deploys the app.
+
+### Pull requests
+
+When you open a PR against `main`, two things happen automatically:
+
+- **Tests run** — the Deploy workflow triggers and runs `npm test` to catch any broken code early.
+- **Terraform plan** — if your PR includes changes to `terraform/` files, the Infrastructure workflow runs `terraform plan` so you can review exactly what infrastructure changes will be made before merging. Nothing is applied until the PR is merged.
 
 ### Subsequent deploys
 
-Just push to `main`. The pipeline handles everything automatically. If you only changed app code (no Terraform changes), it skips the infrastructure step and just builds + deploys.
+Just push to `main`. If you only changed app code, only the Deploy workflow runs. If you changed Terraform files, Infrastructure runs first and Deploy follows automatically once it completes.
 
 ---
 
@@ -147,11 +155,11 @@ Just push to `main`. The pipeline handles everything automatically. If you only 
 
 - **Test on every push and PR.** Tests always run first — nothing gets deployed if they fail.
 
-- **Conditional Terraform.** The pipeline detects whether any `.tf` files changed and only runs `terraform plan`/`apply` when needed. This keeps deploys fast when you're only changing app code.
+- **Separate Infrastructure and Deploy workflows.** Terraform plan/apply lives in `infra.yml` and only runs when `terraform/` files change. The Deploy workflow (`deploy.yml`) handles testing, building, and deploying the app. Deploy automatically triggers after Infrastructure completes via `workflow_run`, so infra is always up to date before a deploy goes out.
 
 - **Plan on PRs, apply on merge.** Pull requests get a `terraform plan` so you can review infrastructure changes before they go live. Merging to `main` triggers the actual apply.
 
-- **Production environment gate.** The deploy step uses GitHub's `production` environment, so you can optionally require manual approval before deploys go out.
+- **Production environment gate.** Both `terraform-apply` and `deploy-production` use GitHub's `production` environment, so you can optionally require manual approval before changes go out.
 
 ### Infrastructure
 

@@ -25,5 +25,6 @@ variable "project_name" {
 variable "github_repository" {
   description = "GitHub owner/repo for OIDC trust (e.g. myorg/my-repo)"
   type        = string
+  default     = "degoke/cred-devops-pipeline"
 }
 

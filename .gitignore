@@ -7,5 +7,3 @@ coverage
 .dist
 .terraform/
 terraform.tfstate*
-
-pad.md
