@@ -13,12 +13,12 @@ output "vpc_id" {
 }
 
 output "ecs_cluster_name" {
-  description = "ECS cluster name for GitHub Actions deploy"
+  description = "ECS cluster"
   value       = aws_ecs_cluster.this.name
 }
 
 output "ecs_service_name" {
-  description = "ECS service name for GitHub Actions deploy"
+  description = "ECS service name"
   value       = aws_ecs_service.app.name
 }
 
