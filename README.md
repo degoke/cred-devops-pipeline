@@ -55,15 +55,18 @@ aws login
 
 This is how Terraform will talk to your AWS account. You need valid credentials before any of the next steps will work.
 
-**2. Bootstrap the Terraform backend**
+**2. Bootstrap AWS resources**
 
-The `bootstrap/` folder sets up two things your project needs before anything else can run:
+The `bootstrap/` folder sets up the foundational AWS resources your project needs before anything else can run. You can either use the Terraform configs provided, or create these resources manually through the AWS Console — the end result is the same.
+
+Resources created by bootstrap:
 
 - An **S3 bucket** to store Terraform state — this is how Terraform remembers what infrastructure it's already created, so it doesn't try to recreate everything on every run.
 - A **DynamoDB table** for state locking — this prevents two people (or two CI runs) from modifying infrastructure at the same time.
 - An **OIDC provider and IAM role** for GitHub Actions — this lets the CI/CD pipeline authenticate to AWS without storing any long-lived access keys as secrets.
+- A **Secrets Manager secret** for GHCR credentials — ECS needs to authenticate with GitHub Container Registry to pull your Docker images (since GHCR repos are private by default).
 
-Copy the example variables and fill in your values:
+To bootstrap with Terraform, copy the example variables and fill in your values:
 
 ```bash
 cd bootstrap
@@ -79,6 +82,14 @@ The bootstrap variables are:
 | `lock_table_name` | Name for the DynamoDB lock table |
 | `project_name` | Your project name (e.g. `cred-devops`) |
 | `github_repository` | Your GitHub repo in `owner/repo` format (e.g. `degoke/cred-devops-pipeline`) |
+| `ghcr_username` | Your GitHub username |
+| `ghcr_pat` | A GitHub Personal Access Token with `read:packages` scope (see step 3) |
+
+**3. Create a GitHub PAT**
+
+ECS Fargate needs credentials to pull images from GitHub Container Registry. Before running bootstrap, go to [GitHub Settings > Developer settings > Personal access tokens](https://github.com/settings/tokens) and create a new token (classic) with the `read:packages` scope. Paste the username and token into your `terraform.tfvars`.
+
+The PAT is marked as `sensitive` in Terraform so it won't show up in plan/apply output, but keep in mind it will be stored in the Terraform state file — make sure your state bucket is properly secured (bootstrap enables versioning and encryption by default).
 
 Then run:
 
@@ -87,26 +98,28 @@ terraform init
 terraform apply
 ```
 
-**3. Copy the OIDC role ARN into the workflow**
+This creates all the bootstrap resources including the GHCR credentials secret in AWS Secrets Manager, pre-populated with your GitHub PAT. You only need to do this once.
 
-After bootstrap finishes, grab the role ARN it created:
+**4. Copy the OIDC role ARN into the workflow**
+
+Grab the role ARN that bootstrap created:
 
 ```bash
 terraform output gha_oidc_role_arn
 ```
 
-Open `.github/workflows/infra.yml` and `.github/workflows/deploy.yml` and paste that ARN as the value of `AWS_OIDC_ROLE_ARN` in both:
+Open `.github/workflows/deploy.yml` and paste that ARN as the value of `AWS_OIDC_ROLE_ARN`:
 
 ```yaml
 env:
   AWS_OIDC_ROLE_ARN: arn:aws:iam::123456789012:role/cred-devops-gha-oidc-role
 ```
 
-This is what allows GitHub Actions to assume an AWS role and deploy on your behalf — without it, the pipelines can't reach AWS.
+This is what allows GitHub Actions to assume an AWS role and deploy on your behalf — without it, the pipeline can't reach AWS.
 
-**4. Terraform variables**
+**5. Terraform variables**
 
-In **CI**, the workflows set them automatically via `-var` flags in `.github/workflows/infra.yml` (`aws_region`, `project_name`, `image_name`, `image_tag`), so you don't need a `terraform.tfvars` file for the pipeline.
+In **CI**, the workflow sets them automatically via `-var` flags in `.github/workflows/deploy.yml` (`aws_region`, `project_name`, `image_name`, `image_tag`), so you don't need a `terraform.tfvars` file for the pipeline.
 
 For **local** Terraform runs (e.g. `terraform plan`), copy the example and edit as needed:
 
@@ -115,25 +128,27 @@ cd terraform
 cp terraform.tfvars.example terraform.tfvars
 ```
 
-**5. Push to `main`**
+**6. Push to `main`**
 
-Once everything is configured, push to `main` and GitHub Actions takes over. Two workflows run:
+Once everything is configured, push to `main` and GitHub Actions takes over. A single workflow (`deploy.yml`) runs the full pipeline in order:
 
-- **Infrastructure** (`infra.yml`) — only triggers when `terraform/` files change. Runs `terraform apply` to update AWS resources.
-- **Deploy** (`deploy.yml`) — triggers on every push to `main` *and* after the Infrastructure workflow completes. Runs tests, builds the Docker image, pushes it to GHCR, reads ECS details from Terraform outputs, and deploys to ECS.
+1. **Test** — runs `npm test` to catch broken code early.
+2. **Build & push** — builds the Docker image and pushes it to GHCR, tagged with the commit SHA.
+3. **Terraform apply** — applies infrastructure changes, including the ECS task definition that references the image just built.
+4. **Deploy** — forces a new ECS deployment so the service picks up the updated task definition.
 
-On the very first push, both workflows run: Infrastructure creates the resources, then Deploy picks up the outputs and deploys the app.
+The image is always built *before* Terraform runs, so the ECS task definition never references an image that doesn't exist yet.
 
 ### Pull requests
 
-When you open a PR against `main`, two things happen automatically:
+When you open a PR against `main`, the same workflow runs but only the relevant jobs:
 
-- **Tests run** — the Deploy workflow triggers and runs `npm test` to catch any broken code early.
-- **Terraform plan** — if your PR includes changes to `terraform/` files, the Infrastructure workflow runs `terraform plan` so you can review exactly what infrastructure changes will be made before merging. Nothing is applied until the PR is merged.
+- **Tests run** — `npm test` catches any broken code early.
+- **Terraform plan** — shows exactly what infrastructure changes will be made if the PR is merged. Nothing is applied until the PR lands on `main`.
 
 ### Subsequent deploys
 
-Just push to `main`. If you only changed app code, only the Deploy workflow runs. If you changed Terraform files, Infrastructure runs first and Deploy follows automatically once it completes.
+Just push to `main`. Every push runs the full pipeline: test, build, apply, deploy.
 
 ---
 
@@ -141,13 +156,15 @@ Just push to `main`. If you only changed app code, only the Deploy workflow runs
 
 ### Security
 
-- **No secrets in plain text.** The database password is generated by Terraform using `random_password` and stored in AWS Secrets Manager. The full connection URL is also in Secrets Manager. ECS pulls these at runtime — nothing sensitive lives in code, environment variables, or task definitions.
+- **No secrets in plain text.** The database password is generated by Terraform using `random_password` and stored in AWS Secrets Manager. The full connection URL is also in Secrets Manager. GHCR credentials are stored in Secrets Manager too. ECS pulls all of these at runtime — nothing sensitive lives in code, environment variables, or task definitions.
 
 - **No long-lived AWS credentials.** GitHub Actions authenticates via OIDC, so there are no access keys to rotate or leak.
 
+- **Private image registry authentication.** ECS authenticates with GHCR using a GitHub PAT stored in Secrets Manager. The ECS task execution role has a scoped-down policy that only allows reading that specific secret.
+
 - **Private by default.** The app and database both live in private subnets. Only the ALB is public-facing. The database is only reachable from the ECS tasks, and the ECS tasks are only reachable from the ALB. Each layer has its own security group with minimal rules.
 
-- **HTTPS without a custom domain.** We don't own a domain for this project, but the app still needs to be served over HTTPS. Rather than buying a domain and setting up ACM certificates + Route53 DNS, we put CloudFront in front of the ALB. CloudFront comes with a free AWS-managed TLS certificate on its `*.cloudfront.net` URL, so we get HTTPS out of the box CloudFront also automatically redirects HTTP to HTTPS.
+- **HTTPS without a custom domain.** We don't own a domain for this project, but the app still needs to be served over HTTPS. Rather than buying a domain and setting up ACM certificates + Route53 DNS, we put CloudFront in front of the ALB. CloudFront comes with a free AWS-managed TLS certificate on its `*.cloudfront.net` URL, so we get HTTPS out of the box. CloudFront also automatically redirects HTTP to HTTPS.
 
 - **Non-root container.** The Docker image runs as `appuser`, not root.
 
@@ -155,11 +172,11 @@ Just push to `main`. If you only changed app code, only the Deploy workflow runs
 
 - **Test on every push and PR.** Tests always run first — nothing gets deployed if they fail.
 
-- **Separate Infrastructure and Deploy workflows.** Terraform plan/apply lives in `infra.yml` and only runs when `terraform/` files change. The Deploy workflow (`deploy.yml`) handles testing, building, and deploying the app. Deploy automatically triggers after Infrastructure completes via `workflow_run`, so infra is always up to date before a deploy goes out.
+- **Single pipeline with correct ordering.** Everything lives in one workflow (`deploy.yml`). On push to `main`, the jobs run in order: test → build & push → terraform apply → deploy. This guarantees the Docker image exists before Terraform creates a task definition that references it, and infrastructure is up to date before the ECS deployment rolls out.
 
 - **Plan on PRs, apply on merge.** Pull requests get a `terraform plan` so you can review infrastructure changes before they go live. Merging to `main` triggers the actual apply.
 
-- **Production environment gate.** Both `terraform-apply` and `deploy-production` use GitHub's `production` environment, so you can optionally require manual approval before changes go out.
+- **Production environment gate.** Both `terraform-apply` and `deploy` use GitHub's `production` environment, so you can optionally require manual approval before changes go out.
 
 ### Infrastructure
 

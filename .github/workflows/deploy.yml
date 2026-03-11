@@ -3,13 +3,11 @@ name: Deploy
 on:
   push:
     branches: ["main"]
-  workflow_run:
-    workflows: ["Infrastructure"]
-    types: [completed]
+  pull_request:
     branches: ["main"]
 
 concurrency:
-  group: deploy-${{ github.event.workflow_run.head_sha || github.sha }}
+  group: deploy-${{ github.sha }}
   cancel-in-progress: true
 
 permissions:
@@ -26,27 +24,47 @@ env:
 
 jobs:
   test:
-    if: >
-      github.event_name == 'push' ||
-      github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       - uses: actions/setup-node@v4
         with:
           node-version: 20
       - run: npm ci
       - run: npm test
 
+  terraform-plan:
+    if: github.event_name == 'pull_request'
+    needs: test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ env.TF_WORKING_DIR }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.5
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - run: terraform init -input=false
+      - name: Terraform plan
+        run: |
+          terraform plan -input=false \
+            -var "aws_region=${{ env.AWS_REGION }}" \
+            -var "environment=${{ env.ENVIRONMENT }}" \
+            -var "project_name=${{ github.event.repository.name }}" \
+            -var "image_name=${{ env.IMAGE_NAME }}" \
+            -var "image_tag=${{ github.sha }}"
+
   build-and-push:
+    if: github.event_name == 'push'
     needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
@@ -59,17 +77,41 @@ jobs:
           context: .
           push: true
           tags: |
-            ${{ env.IMAGE_NAME }}:${{ github.event.workflow_run.head_sha || github.sha }}
+            ${{ env.IMAGE_NAME }}:${{ github.sha }}
             ${{ env.IMAGE_NAME }}:latest
 
-  deploy-production:
+  terraform-apply:
     needs: build-and-push
+    runs-on: ubuntu-latest
+    environment: production
+    defaults:
+      run:
+        working-directory: ${{ env.TF_WORKING_DIR }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.5
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - run: terraform init -input=false
+      - name: Terraform apply
+        run: |
+          terraform apply -input=false -auto-approve \
+            -var "aws_region=${{ env.AWS_REGION }}" \
+            -var "environment=${{ env.ENVIRONMENT }}" \
+            -var "project_name=${{ github.event.repository.name }}" \
+            -var "image_name=${{ env.IMAGE_NAME }}" \
+            -var "image_tag=${{ github.sha }}"
+
+  deploy:
+    needs: terraform-apply
     runs-on: ubuntu-latest
     environment: production
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.9.5
