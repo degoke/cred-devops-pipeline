@@ -37,7 +37,16 @@ Once it's running locally, you have three endpoints:
 
 Locally: `http://localhost:3000/health`
 
-In production, the app is served through CloudFront, so you'd access it at the CloudFront URL that Terraform outputs (something like `https://d1234abcdef.cloudfront.net/health`).
+In production, the app is served through CloudFront.
+
+- **From GitHub Actions logs**: after the `terraform-apply` job runs in `.github/workflows/deploy.yml`, the `deploy` job calls `terraform output` and prints the `cloudfront_domain_name` output. Look for a line like `cloudfront_domain_name = d1234abcdef.cloudfront.net` in the workflow logs, then hit `https://d1234abcdef.cloudfront.net/health`.
+- **From the AWS Console**: open CloudFront in the AWS console and find the distribution whose origin is the `cred-devops-pipeline-production-alb` load balancer. Use its **Domain name** (e.g. `d1234abcdef.cloudfront.net`) to access the app.
+
+To debug or monitor the running tasks, open **CloudWatch Logs**, then:
+
+- Go to **Log groups**.
+- Open `/ecs/cred-devops-pipeline-production-app`.
+- Select the latest log stream for the ECS task to see application logs and health checks.
 
 ---
 

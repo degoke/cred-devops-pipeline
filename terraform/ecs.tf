@@ -38,7 +38,10 @@ resource "aws_iam_role_policy" "ecs_ghcr_secret" {
       {
         Effect   = "Allow",
         Action   = "secretsmanager:GetSecretValue",
-        Resource = data.aws_secretsmanager_secret.ghcr.arn
+        Resource = [
+          data.aws_secretsmanager_secret.ghcr.arn,
+          aws_secretsmanager_secret.db_connection.arn
+        ]
       }
     ]
   })
