@@ -1,14 +1,14 @@
 resource "aws_db_subnet_group" "app" {
-  name       = "${var.project_name}-db-subnets"
+  name       = "${var.project_name}-${local.environment}-db-subnets"
   subnet_ids = aws_subnet.private[*].id
 
   tags = {
-    Name = "${var.project_name}-db-subnets"
+    Name = "${var.project_name}-${local.environment}-db-subnets"
   }
 }
 
 resource "aws_db_instance" "app" {
-  identifier              = "${var.project_name}-db"
+  identifier              = "${var.project_name}-${local.environment}-db"
   engine                  = "postgres"
   engine_version          = "16.3"
   instance_class          = "db.t3.micro"
@@ -24,6 +24,6 @@ resource "aws_db_instance" "app" {
   backup_retention_period = 7
 
   tags = {
-    Name = "${var.project_name}-db"
+    Name = "${var.project_name}-${local.environment}-db"
   }
 }

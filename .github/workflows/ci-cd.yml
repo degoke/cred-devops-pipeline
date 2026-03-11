@@ -13,8 +13,9 @@ permissions:
 
 env:
   AWS_REGION: us-east-1
+  AWS_OIDC_ROLE_ARN: arn:aws:iam::623927359054:role/cred-devops-gha-oidc-role
   TF_WORKING_DIR: terraform
-  IMAGE_NAME: ghcr.io/${{ github.repository }}/cred-devops-app
+  IMAGE_NAME: ghcr.io/${{ github.repository }}
 
 jobs:
   test:
@@ -27,9 +28,24 @@ jobs:
       - run: npm ci
       - run: npm test
 
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      terraform: ${{ steps.filter.outputs.terraform }}
+    steps:
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            terraform:
+              - 'terraform/**'
+              - '**.tf'
+              - '**.tfvars'
+              - '**.tfvars.json'
+
   terraform-plan:
-    if: github.event_name == 'pull_request'
-    needs: test
+    if: github.event_name == 'pull_request' && needs.changes.outputs.terraform == 'true'
+    needs: [test, changes]
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -41,10 +57,41 @@ jobs:
           terraform_version: 1.9.5
       - uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          role-to-assume: ${{ env.AWS_OIDC_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
       - run: terraform init -input=false
-      - run: terraform plan -input=false
+      - name: Terraform plan
+        run: |
+          terraform plan -input=false \
+            -var "aws_region=${{ env.AWS_REGION }}" \
+            -var "project_name=${{ github.event.repository.name }}" \
+            -var "image_name=${{ env.IMAGE_NAME }}" \
+            -var "image_tag=${{ github.sha }}"
+
+  terraform-outputs:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      ecs_cluster_name: ${{ steps.outputs.outputs.ecs_cluster_name }}
+      ecs_service_name: ${{ steps.outputs.outputs.ecs_service_name }}
+    defaults:
+      run:
+        working-directory: ${{ env.TF_WORKING_DIR }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.5
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ env.AWS_OIDC_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+      - run: terraform init -input=false
+      - name: Get ECS cluster and service names from Terraform
+        id: outputs
+        run: |
+          echo "ecs_cluster_name=$(terraform output -raw ecs_cluster_name)" >> $GITHUB_OUTPUT
+          echo "ecs_service_name=$(terraform output -raw ecs_service_name)" >> $GITHUB_OUTPUT
 
   build-and-push:
     if: github.ref == 'refs/heads/main'
@@ -68,9 +115,10 @@ jobs:
             ${{ env.IMAGE_NAME }}:latest
 
   terraform-apply:
-    if: github.ref == 'refs/heads/main'
-    needs: build-and-push
+    if: github.ref == 'refs/heads/main' && needs.changes.outputs.terraform == 'true'
+    needs: [build-and-push, changes]
     runs-on: ubuntu-latest
+    environment: production
     defaults:
       run:
         working-directory: ${{ env.TF_WORKING_DIR }}
@@ -81,41 +129,30 @@ jobs:
           terraform_version: 1.9.5
       - uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          role-to-assume: ${{ env.AWS_OIDC_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
       - run: terraform init -input=false
       - name: Terraform apply
-        run: terraform apply -input=false -auto-approve -var "image_tag=${{ github.sha }}"
-
-  deploy-staging:
-    if: github.ref == 'refs/heads/main'
-    needs: terraform-apply
-    runs-on: ubuntu-latest
-    steps:
-      - uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-      - name: Update ECS service (staging)
         run: |
-          aws ecs update-service \
-            --cluster "${{ secrets.AWS_ECS_CLUSTER_NAME }}" \
-            --service "${{ secrets.AWS_ECS_SERVICE_STAGING }}" \
-            --force-new-deployment
+          terraform apply -input=false -auto-approve \
+            -var "aws_region=${{ env.AWS_REGION }}" \
+            -var "project_name=${{ github.event.repository.name }}" \
+            -var "image_name=${{ env.IMAGE_NAME }}" \
+            -var "image_tag=${{ github.sha }}"
 
   deploy-production:
     if: github.ref == 'refs/heads/main'
-    needs: deploy-staging
+    needs: [build-and-push, terraform-outputs]
     runs-on: ubuntu-latest
     environment: production
     steps:
       - uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
+          role-to-assume: ${{ env.AWS_OIDC_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
       - name: Update ECS service (production)
         run: |
           aws ecs update-service \
-            --cluster "${{ secrets.AWS_ECS_CLUSTER_NAME }}" \
-            --service "${{ secrets.AWS_ECS_SERVICE_PRODUCTION }}" \
+            --cluster "${{ needs.terraform-outputs.outputs.ecs_cluster_name }}" \
+            --service "${{ needs.terraform-outputs.outputs.ecs_service_name }}" \
             --force-new-deployment

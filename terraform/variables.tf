@@ -10,11 +10,6 @@ variable "project_name" {
   default     = "cred-devops"
 }
 
-variable "domain_name" {
-  description = "DNS domain name for the application (e.g. app.example.com)"
-  type        = string
-}
-
 variable "vpc_cidr" {
   description = "CIDR block for the VPC"
   type        = string
@@ -49,14 +44,9 @@ variable "image_tag" {
   type        = string
 }
 
-variable "route53_zone_id" {
-  description = "Route53 hosted zone ID used for ACM DNS validation"
-  type        = string
-}
-
 variable "db_username" {
   description = "Master username for the RDS PostgreSQL instance"
   type        = string
-  default     = "appuser"
+  default     = "cred-devops"
 }
 

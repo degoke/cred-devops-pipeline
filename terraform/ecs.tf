@@ -1,9 +1,9 @@
 resource "aws_ecs_cluster" "this" {
-  name = "${var.project_name}-cluster"
+  name = "${var.project_name}-${local.environment}-cluster"
 }
 
 resource "aws_iam_role" "ecs_task_execution" {
-  name = "${var.project_name}-ecs-task-execution-role"
+  name = "${var.project_name}-${local.environment}-ecs-task-execution-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
@@ -25,12 +25,12 @@ resource "aws_iam_role_policy_attachment" "ecs_task_execution" {
 }
 
 resource "aws_cloudwatch_log_group" "app" {
-  name              = "/ecs/${var.project_name}-app"
+  name              = "/ecs/${var.project_name}-${local.environment}-app"
   retention_in_days = 7
 }
 
 resource "aws_ecs_task_definition" "app" {
-  family                   = "${var.project_name}-task"
+  family                   = "${var.project_name}-${local.environment}-task"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
   cpu                      = "256"
@@ -80,7 +80,7 @@ resource "aws_ecs_task_definition" "app" {
 }
 
 resource "aws_ecs_service" "app" {
-  name            = "${var.project_name}-service"
+  name            = "${var.project_name}-${local.environment}-service"
   cluster         = aws_ecs_cluster.this.id
   task_definition = aws_ecs_task_definition.app.arn
   launch_type     = "FARGATE"

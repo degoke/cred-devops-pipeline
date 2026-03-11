@@ -5,7 +5,7 @@ resource "random_password" "db" {
 }
 
 resource "aws_secretsmanager_secret" "db_password" {
-  name = "${var.project_name}-db-password"
+  name = "${var.project_name}-${local.environment}-db-password"
 }
 
 resource "aws_secretsmanager_secret_version" "db_password" {
@@ -18,7 +18,7 @@ locals {
 }
 
 resource "aws_secretsmanager_secret" "db_connection" {
-  name = "${var.project_name}-db-connection-url"
+  name = "${var.project_name}-${local.environment}-db-connection-url"
 }
 
 resource "aws_secretsmanager_secret_version" "db_connection" {

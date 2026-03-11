@@ -1,5 +1,5 @@
 resource "aws_security_group" "alb" {
-  name        = "${var.project_name}-alb-sg"
+  name        = "${var.project_name}-${local.environment}-alb-sg"
   description = "ALB security group"
   vpc_id      = aws_vpc.main.id
 
@@ -25,12 +25,12 @@ resource "aws_security_group" "alb" {
   }
 
   tags = {
-    Name = "${var.project_name}-alb-sg"
+    Name = "${var.project_name}-${local.environment}-alb-sg"
   }
 }
 
 resource "aws_security_group" "ecs" {
-  name        = "${var.project_name}-ecs-sg"
+  name        = "${var.project_name}-${local.environment}-ecs-sg"
   description = "ECS tasks security group"
   vpc_id      = aws_vpc.main.id
 
@@ -49,12 +49,12 @@ resource "aws_security_group" "ecs" {
   }
 
   tags = {
-    Name = "${var.project_name}-ecs-sg"
+    Name = "${var.project_name}-${local.environment}-ecs-sg"
   }
 }
 
 resource "aws_security_group" "rds" {
-  name        = "${var.project_name}-rds-sg"
+  name        = "${var.project_name}-${local.environment}-rds-sg"
   description = "RDS security group"
   vpc_id      = aws_vpc.main.id
 
@@ -73,6 +73,6 @@ resource "aws_security_group" "rds" {
   }
 
   tags = {
-    Name = "${var.project_name}-rds-sg"
+    Name = "${var.project_name}-${local.environment}-rds-sg"
   }
 }
