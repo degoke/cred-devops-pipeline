@@ -16,3 +16,14 @@ variable "lock_table_name" {
   default     = "cred-devops-tf-locks"
 }
 
+variable "project_name" {
+  description = "Project name prefix (used for OIDC role name)"
+  type        = string
+  default     = "cred-devops"
+}
+
+variable "github_repository" {
+  description = "GitHub owner/repo for OIDC trust (e.g. myorg/my-repo)"
+  type        = string
+}
+

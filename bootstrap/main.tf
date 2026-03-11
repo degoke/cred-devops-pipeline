@@ -65,3 +65,8 @@ output "lock_table_name" {
   value       = aws_dynamodb_table.tf_locks.name
 }
 
+output "gha_oidc_role_arn" {
+  description = "ARN of the IAM role for GitHub Actions OIDC (use for AWS_OIDC_ROLE_ARN in CI)"
+  value       = aws_iam_role.gha_oidc.arn
+}
+
