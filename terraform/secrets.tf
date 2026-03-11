@@ -1,7 +1,6 @@
 resource "random_password" "db" {
   length           = 32
   special          = true
-  override_characters = "!@#$%^&*()-_=+[]{}"
 }
 
 resource "aws_secretsmanager_secret" "db_password" {
