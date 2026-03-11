@@ -10,7 +10,7 @@ resource "aws_db_subnet_group" "app" {
 resource "aws_db_instance" "app" {
   identifier              = "${var.project_name}-${local.environment}-db"
   engine                  = "postgres"
-  engine_version          = "16.3"
+  engine_version          = "16.6"
   instance_class          = "db.t3.micro"
   allocated_storage       = 20
   db_subnet_group_name    = aws_db_subnet_group.app.name
@@ -21,7 +21,7 @@ resource "aws_db_instance" "app" {
   db_name                 = var.db_name
   skip_final_snapshot     = true
   deletion_protection     = false
-  backup_retention_period = 7
+  backup_retention_period = 0
 
   tags = {
     Name = "${var.project_name}-${local.environment}-db"

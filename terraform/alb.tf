@@ -1,5 +1,5 @@
 resource "aws_lb" "app" {
-  name               = "${var.project_name}-${local.environment}-alb"
+  name               = substr("${var.project_name}-${local.environment}-alb", 0, 32)
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
@@ -11,10 +11,11 @@ resource "aws_lb" "app" {
 }
 
 resource "aws_lb_target_group" "app" {
-  name     = "${var.project_name}-${local.environment}-tg"
-  port     = 3000
-  protocol = "HTTP"
-  vpc_id   = aws_vpc.main.id
+  name        = substr("${var.project_name}-${local.environment}-tg", 0, 32)
+  port        = 3000
+  protocol    = "HTTP"
+  target_type = "ip"
+  vpc_id      = aws_vpc.main.id
 
   health_check {
     path                = "/health"
@@ -23,6 +24,10 @@ resource "aws_lb_target_group" "app" {
     timeout             = 5
     interval            = 30
     matcher             = "200"
+  }
+
+  lifecycle {
+    create_before_destroy = true
   }
 }
 

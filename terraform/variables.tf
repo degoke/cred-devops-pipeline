@@ -55,13 +55,13 @@ variable "image_tag" {
 variable "db_username" {
   description = "Master username for the RDS PostgreSQL instance"
   type        = string
-  default     = "cred-devops"
+  default     = "creddevops"
 }
 
 variable "db_name" {
   description = "Name of the PostgreSQL database to create"
   type        = string
-  default     = "cred-devops"
+  default     = "creddevops"
 }
 
 
