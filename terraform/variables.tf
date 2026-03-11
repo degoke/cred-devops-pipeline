@@ -35,7 +35,7 @@ variable "private_subnet_cidrs" {
 }
 
 variable "image_name" {
-  description = "Base container image name (registry/repo)"
+  description = "Base container image name"
   type        = string
 }
 
