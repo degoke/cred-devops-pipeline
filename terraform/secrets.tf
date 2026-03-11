@@ -15,7 +15,7 @@ resource "aws_secretsmanager_secret_version" "db_password" {
 }
 
 locals {
-  db_connection_url = "postgres://${var.db_username}:${random_password.db.result}@${aws_db_instance.app.address}:5432/${var.db_name}"
+  db_connection_url = "postgres://${var.db_username}:${random_password.db.result}@${aws_db_instance.app.address}:5432/${var.db_name}?sslmode=require"
 }
 
 resource "aws_secretsmanager_secret" "db_connection" {
