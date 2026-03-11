@@ -1,5 +1,5 @@
 resource "aws_lb" "app" {
-  name               = substr("${var.project_name}-${local.environment}-alb", 0, 32)
+  name               = replace(substr("${var.project_name}-${local.environment}-alb", 0, 32), "/-+$/", "")
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
@@ -11,7 +11,7 @@ resource "aws_lb" "app" {
 }
 
 resource "aws_lb_target_group" "app" {
-  name        = substr("${var.project_name}-${local.environment}-tg", 0, 32)
+  name        = replace(substr("${var.project_name}-${local.environment}-tg", 0, 32), "/-+$/", "")
   port        = 3000
   protocol    = "HTTP"
   target_type = "ip"

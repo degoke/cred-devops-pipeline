@@ -54,14 +54,26 @@ resource "aws_iam_role_policy" "gha_oidc" {
       {
         Effect = "Allow",
         Action = [
-          "ecs:Describe*",
-          "ecs:UpdateService",
-          "ecs:RegisterTaskDefinition",
+          "ecs:*",
+          "iam:GetRole",
+          "iam:CreateRole",
+          "iam:DeleteRole",
+          "iam:UpdateRole",
+          "iam:PutRolePolicy",
+          "iam:GetRolePolicy",
+          "iam:DeleteRolePolicy",
+          "iam:ListRolePolicies",
+          "iam:AttachRolePolicy",
+          "iam:DetachRolePolicy",
+          "iam:ListAttachedRolePolicies",
+          "iam:ListInstanceProfilesForRole",
+          "iam:TagRole",
+          "iam:UntagRole",
           "iam:PassRole",
           "cloudwatch:PutMetricData",
           "logs:*",
           "elasticloadbalancing:*",
-          "ec2:Describe*",
+          "ec2:*",
           "rds:*",
           "acm:*",
           "route53:*",
@@ -74,11 +86,17 @@ resource "aws_iam_role_policy" "gha_oidc" {
       {
         Effect = "Allow",
         Action = [
+          "secretsmanager:CreateSecret",
+          "secretsmanager:DeleteSecret",
           "secretsmanager:DescribeSecret",
           "secretsmanager:GetSecretValue",
-          "secretsmanager:GetResourcePolicy"
+          "secretsmanager:PutSecretValue",
+          "secretsmanager:UpdateSecret",
+          "secretsmanager:GetResourcePolicy",
+          "secretsmanager:TagResource",
+          "secretsmanager:UntagResource"
         ],
-        Resource = "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}-ghcr-credentials*"
+        Resource = "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}-*"
       }
     ]
   })
