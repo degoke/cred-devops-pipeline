@@ -17,7 +17,7 @@ permissions:
 
 env:
   AWS_REGION: us-east-1
-  AWS_OIDC_ROLE_ARN: arn:aws:iam::623927359054:role/cred-devops-gha-oidc-role
+  AWS_OIDC_ROLE_ARN: arn:aws:iam::623927359054:role/cred-devops-pipeline-gha-oidc-role
   TF_WORKING_DIR: terraform
   IMAGE_NAME: ghcr.io/${{ github.repository }}
   ENVIRONMENT: production
