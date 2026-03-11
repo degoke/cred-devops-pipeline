@@ -9,11 +9,11 @@ resource "aws_secretsmanager_secret" "db_password" {
 
 resource "aws_secretsmanager_secret_version" "db_password" {
   secret_id     = aws_secretsmanager_secret.db_password.id
-  secret_string = random_password.db.value
+  secret_string = random_password.db.result
 }
 
 locals {
-  db_connection_url = "postgres://${var.db_username}:${random_password.db.value}@${aws_db_instance.app.address}:5432/${var.db_name}"
+  db_connection_url = "postgres://${var.db_username}:${random_password.db.result}@${aws_db_instance.app.address}:5432/${var.db_name}"
 }
 
 resource "aws_secretsmanager_secret" "db_connection" {

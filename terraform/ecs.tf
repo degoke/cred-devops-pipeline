@@ -1,3 +1,7 @@
+data "aws_secretsmanager_secret" "ghcr" {
+  name = "${var.project_name}-ghcr-credentials"
+}
+
 resource "aws_ecs_cluster" "this" {
   name = "${var.project_name}-${local.environment}-cluster"
 }
@@ -24,6 +28,22 @@ resource "aws_iam_role_policy_attachment" "ecs_task_execution" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
+resource "aws_iam_role_policy" "ecs_ghcr_secret" {
+  name = "${var.project_name}-${local.environment}-ecs-ghcr-secret"
+  role = aws_iam_role.ecs_task_execution.id
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Effect   = "Allow",
+        Action   = "secretsmanager:GetSecretValue",
+        Resource = data.aws_secretsmanager_secret.ghcr.arn
+      }
+    ]
+  })
+}
+
 resource "aws_cloudwatch_log_group" "app" {
   name              = "/ecs/${var.project_name}-${local.environment}-app"
   retention_in_days = 7
@@ -42,6 +62,9 @@ resource "aws_ecs_task_definition" "app" {
       name      = "app",
       image     = "${var.image_name}:${var.image_tag}",
       essential = true,
+      repositoryCredentials = {
+        credentialsParameter = data.aws_secretsmanager_secret.ghcr.arn
+      },
       portMappings = [
         {
           containerPort = 3000,
@@ -99,6 +122,4 @@ resource "aws_ecs_service" "app" {
 
   deployment_minimum_healthy_percent = 100
   deployment_maximum_percent         = 200
-
-  depends_on = [aws_lb_listener.https]
 }

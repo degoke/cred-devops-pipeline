@@ -1,4 +1,4 @@
 aws_region        = "us-east-1"
-project_name = "cred-devops"
-image_name   = "ghcr.io/degoke/cred-devops-app"
+project_name = "cred-devops-pipeline"
+image_name   = "ghcr.io/degoke/cred-devops-pipeline"
 image_tag   = "latest"

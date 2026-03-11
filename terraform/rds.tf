@@ -17,7 +17,7 @@ resource "aws_db_instance" "app" {
   vpc_security_group_ids  = [aws_security_group.rds.id]
   publicly_accessible     = false
   username                = var.db_username
-  password                = random_password.db.value
+  password                = random_password.db.result
   db_name                 = var.db_name
   skip_final_snapshot     = true
   deletion_protection     = false

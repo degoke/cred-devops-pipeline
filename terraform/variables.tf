@@ -13,7 +13,7 @@ variable "environment" {
 variable "project_name" {
   description = "Project name prefix for resources"
   type        = string
-  default     = "cred-devops"
+  default     = "cred-devops-pipeline"
 }
 
 variable "vpc_cidr" {
@@ -43,15 +43,23 @@ variable "private_subnet_cidrs" {
 variable "image_name" {
   description = "Base container image name"
   type        = string
+  default     = "ghcr.io/degoke/cred-devops-pipeline"
 }
 
 variable "image_tag" {
   description = "Container image tag"
   type        = string
+  default     = "latest"
 }
 
 variable "db_username" {
   description = "Master username for the RDS PostgreSQL instance"
+  type        = string
+  default     = "cred-devops"
+}
+
+variable "db_name" {
+  description = "Name of the PostgreSQL database to create"
   type        = string
   default     = "cred-devops"
 }
