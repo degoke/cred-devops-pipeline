@@ -70,6 +70,14 @@ resource "aws_iam_role_policy" "gha_oidc" {
           "cloudfront:*"
         ],
         Resource = "*"
+      },
+      {
+        Effect = "Allow",
+        Action = [
+          "secretsmanager:DescribeSecret",
+          "secretsmanager:GetSecretValue"
+        ],
+        Resource = "arn:aws:secretsmanager:${var.aws_region}:${data.aws_caller_identity.current.account_id}:secret:${var.project_name}-ghcr-credentials*"
       }
     ]
   })
